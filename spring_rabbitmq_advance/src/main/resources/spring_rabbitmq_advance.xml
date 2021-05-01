@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       https://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/rabbit
+       http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+    <!--加载配置文件-->
+    <context:property-placeholder location="classpath:rabbitmq.properties"/>
+
+    <!-- 定义rabbitmq connectionFactory -->
+    <rabbit:connection-factory id="connectionFactory" host="${rabbitmq.host}"
+                               port="${rabbitmq.port}"
+                               username="${rabbitmq.username}"
+                               password="${rabbitmq.password}"
+                               virtual-host="${rabbitmq.virtual-host}"
+                               publisher-confirms="true"
+                               publisher-returns="true"/>
+
+    <rabbit:admin connection-factory="connectionFactory"/>
+
+    <rabbit:queue id="rabbit_queue_advance" name="rabbit_queue_advance" durable="true" />
+    <rabbit:topic-exchange id="rabbit_exchange_advance" name="rabbit_exchange_advance" durable="true" >
+        <rabbit:bindings>
+            <rabbit:binding pattern="hzz.#" queue="rabbit_queue_advance" />
+        </rabbit:bindings>
+    </rabbit:topic-exchange>
+
+    <bean id="ackListener" class="org.hzz.AckListener"/>
+    <bean id="qosListener" class="org.hzz.QosListener" />
+    <bean id="orderListener" class="org.hzz.OrderListener" />
+    <rabbit:listener-container connection-factory="connectionFactory" acknowledge="manual" prefetch="2">
+<!--        <rabbit:listener ref="ackListener" queue-names="rabbit_queue_advance"/>-->
+<!--        <rabbit:listener ref="qosListener" queue-names="rabbit_queue_advance"/>-->
+        <rabbit:listener ref="orderListener" queue-names="order_queue_dlx"/>
+    </rabbit:listener-container>
+
+    <!--
+           延迟队列：
+               1. 定义正常交换机（order_exchange）和队列(order_queue)
+               2. 定义死信交换机（order_exchange_dlx）和队列(order_queue_dlx)
+               3. 绑定，设置正常队列过期时间为30分钟(此处演示为10s)
+       -->
+    <!-- 1. 定义正常交换机（order_exchange）和队列(order_queue)-->
+    <rabbit:queue id="order_queue" name="order_queue">
+        <rabbit:queue-arguments>
+            <entry key="x-dead-letter-exchange" value="order_exchange_dlx" />
+            <entry key="x-dead-letter-routing-key" value="dlx.order.cancel" />
+            <entry key="x-message-ttl" value="10000" value-type="java.lang.Integer" />
+        </rabbit:queue-arguments>
+    </rabbit:queue>
+    <rabbit:topic-exchange name="order_exchange" id="order_exchange">
+        <rabbit:bindings>
+            <rabbit:binding pattern="#.order" queue="order_queue" />
+        </rabbit:bindings>
+    </rabbit:topic-exchange>
+    <!--2. 定义死信交换机（order_exchange_dlx）和队列(order_queue_dlx)-->
+    <rabbit:queue id="order_queue_dlx" name="order_queue_dlx" />
+    <rabbit:topic-exchange name="order_exchange_dlx" id="order_exchange_dlx">
+        <rabbit:bindings>
+            <rabbit:binding pattern="*.order.cancel" queue="order_queue_dlx" />
+        </rabbit:bindings>
+    </rabbit:topic-exchange>
+
+    <rabbit:template id="rabbitTemplate" connection-factory="connectionFactory"/>
+</beans>

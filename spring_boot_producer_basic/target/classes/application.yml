@@ -1,0 +1,8 @@
+spring:
+  rabbitmq:
+    host: 192.168.88.170
+    port: 5672
+    virtual-host: baiqi_vm
+    username: test
+    password: test
+

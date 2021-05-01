@@ -1,0 +1,2 @@
+org\hzz\ProducerApp.class
+org\hzz\config\rabbitmq\RabbitMQConfig.class
